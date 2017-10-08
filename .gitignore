@@ -1,5 +1,6 @@
 /target
 .cargo
+.vscode/
 
 # compiled output
 /dist
@@ -19,3 +20,4 @@ npm-debug.log
 yarn-error.log
 testem.log
 .env
+*~

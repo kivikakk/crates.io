@@ -48,6 +48,7 @@ pub struct EncodableCategoryWithSubcategories {
     pub created_at: NaiveDateTime,
     pub crates_cnt: i32,
     pub subcategories: Vec<EncodableCategory>,
+    pub parent_categories: Vec<EncodableCategory>,
 }
 
 impl Category {
@@ -161,6 +162,24 @@ impl Category {
         ).bind::<Text, _>(&self.category)
             .load(conn)
     }
+
+    pub fn parent_categories(&self, conn: &PgConnection) -> QueryResult<Vec<Category>> {
+        // Path from top-level Category to this Category, not including this Category.
+        use diesel::expression::dsl::*;
+        use diesel::types::Text;
+
+        sql::<categories::SqlType>(
+            "SELECT c.id, c.category, c.slug, c.description, \
+            COALESCE(( \
+            SELECT sum(c2.crates_cnt)::int from categories c2 \
+            WHERE path <@ subltree(c.path, 0, 2)), 0) as crates_cnt, c.created_at \
+            FROM categories c \
+            WHERE c.path @> (select path from categories where slug = $1) \
+            AND c.slug <> $1
+            ORDER BY c.path",
+        ).bind::<Text, _>(&self.slug)
+            .load(conn)
+    }
 }
 
 #[derive(Insertable, AsChangeset, Default, Debug)]
@@ -223,6 +242,10 @@ pub fn show(req: &mut Request) -> CargoResult<Response> {
         .into_iter()
         .map(Category::encodable)
         .collect();
+    let parents = cat.parent_categories(&conn)?
+        .into_iter()
+        .map(Category::encodable)
+        .collect();
 
     let cat = cat.encodable();
     let cat_with_subcats = EncodableCategoryWithSubcategories {
@@ -233,6 +256,7 @@ pub fn show(req: &mut Request) -> CargoResult<Response> {
         created_at: cat.created_at,
         crates_cnt: cat.crates_cnt,
         subcategories: subcats,
+        parent_categories: parents,
     };
 
     #[derive(Serialize)]
