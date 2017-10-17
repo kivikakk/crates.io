@@ -67,7 +67,7 @@ impl Category {
             description: description.clone(),
             created_at: created_at,
             crates_cnt: crates_cnt,
-            category: category,
+            category: category.rsplit("::").collect::<Vec<_>>()[0].to_string(),
         }
     }
 
